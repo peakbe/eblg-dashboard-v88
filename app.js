@@ -175,46 +175,43 @@ function updateTafUI(data) {
     el.innerText = data.raw || "TAF disponible";
 }
 
-// =========================
-// FIDS (UI compacte + colorée)
-// =========================
+/* ----------------------------------------------------------
+   FIDS AVEC FALLBACK ROBUSTE
+---------------------------------------------------------- */
+app.get("/fids", async (req, res) => {
+  try {
+    // Exemple de source FIDS (à remplacer plus tard)
+    const url = "https://opensky-network.org/api/flights/departure?airport=EBLG&begin=0&end=0";
 
-async function loadFids() {
-    const data = await fetchJSON(ENDPOINTS.fids);
-    updateFidsUI(data);
-}
-
-function updateFidsUI(data) {
-    const container = document.getElementById("fids");
-    if (!container) return;
-
-    if (data.fallback) {
-        container.innerHTML = `<div class="fids-row fids-unknown">FIDS indisponible</div>`;
-        return;
+    let response;
+    try {
+      response = await fetch(url);
+    } catch (networkError) {
+      console.error("Erreur réseau FIDS :", networkError);
+      throw new Error("NETWORK_FAIL");
     }
 
-    container.innerHTML = ""; // reset
+    if (!response.ok) throw new Error("HTTP_FAIL");
 
-    data.forEach(flight => {
-        const status = (flight.status || "").toLowerCase();
+    const data = await response.json();
+    return res.json(data);
 
-        let cssClass = "fids-unknown";
-        if (status.includes("on time")) cssClass = "fids-on-time";
-        if (status.includes("delayed")) cssClass = "fids-delayed";
-        if (status.includes("cancel")) cssClass = "fids-cancelled";
-        if (status.includes("board")) cssClass = "fids-boarding";
+  } catch (error) {
+    console.error("FIDS DOWN → fallback activé :", error.message);
 
-        const row = document.createElement("div");
-        row.className = `fids-row ${cssClass}`;
-        row.innerHTML = `
-            <span>${flight.flight}</span>
-            <span>${flight.destination}</span>
-            <span>${flight.time}</span>
-            <span>${flight.status}</span>
-        `;
-        container.appendChild(row);
-    });
-}
+    return res.json([
+      {
+        flight: "N/A",
+        destination: "N/A",
+        time: "N/A",
+        status: "Unavailable",
+        fallback: true,
+        timestamp: new Date().toISOString()
+      }
+    ]);
+  }
+});
+
 
 // =========================
 // PANEL D'ÉTAT GLOBAL
